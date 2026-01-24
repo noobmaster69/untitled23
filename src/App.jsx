@@ -625,7 +625,7 @@ const formatAttachmentForPrompt = (attachment) => {
 }
 
 const normalizeVerbosity = (value) =>
-  ['low', 'medium', 'high'].includes(value) ? value : 'medium'
+  ['low', 'medium', 'high'].includes(value) ? value : 'high'
 
 const normalizeReasoningEffort = (model, effort) => {
   const allowed = ['none', 'low', 'medium', 'high']
@@ -1746,10 +1746,10 @@ function App() {
     loadStored('llm-chat-system-prompt', DEFAULT_SYSTEM_PROMPT),
   )
   const [reasoningEffort, setReasoningEffort] = useState(() =>
-    loadStored('llm-chat-reasoning-effort', 'none'),
+    loadStored('llm-chat-reasoning-effort', 'high'),
   )
   const [verbosity, setVerbosity] = useState(() =>
-    loadStored('llm-chat-verbosity', 'medium'),
+    loadStored('llm-chat-verbosity', 'high'),
   )
   const [reasoningPreviewEnabled, setReasoningPreviewEnabled] = useState(() =>
     loadStored('llm-chat-reasoning-preview', true),
@@ -2958,13 +2958,14 @@ function App() {
                 <div className="flex items-center justify-between text-sm font-semibold text-slate-900 dark:text-[#ffffff]">
                   <span>Max tokens</span>
                   <span className="text-xs text-slate-500 dark:text-[#afafaf]">
-                    {maxTokens}
+                    {maxTokens.toLocaleString()}
                   </span>
                 </div>
                 <input
-                  type="number"
+                  type="range"
                   min={provider.maxTokensRange.min}
                   max={provider.maxTokensRange.max}
+                  step={1}
                   value={maxTokens}
                   onChange={(event) =>
                     setMaxTokens(
@@ -2975,8 +2976,12 @@ function App() {
                       ),
                     )
                   }
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200 dark:border-[#ffffff26] dark:bg-[#303030] dark:text-[#ffffff] dark:focus:border-[#fff3] dark:focus:ring-[#414141]"
+                  className="w-full accent-slate-900 dark:accent-[#ffffff]"
                 />
+                <div className="flex items-center justify-between text-[11px] text-slate-400 dark:text-[#afafaf]">
+                  <span>{provider.maxTokensRange.min.toLocaleString()}</span>
+                  <span>{provider.maxTokensRange.max.toLocaleString()}</span>
+                </div>
               </div>
 
               <div className="space-y-2">
