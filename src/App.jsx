@@ -183,7 +183,7 @@ const loadStored = (key, fallback) => {
       return fallback
     }
     return JSON.parse(raw)
-  } catch (error) {
+  } catch {
     return fallback
   }
 }
@@ -194,7 +194,7 @@ const saveStored = (key, value) => {
   }
   try {
     window.localStorage.setItem(key, JSON.stringify(value))
-  } catch (error) {
+  } catch {
     // Ignore write errors (storage disabled, quota, etc.)
   }
 }
@@ -384,7 +384,7 @@ const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text)
       return true
-    } catch (error) {
+    } catch {
       // Fallback to legacy copy.
     }
   }
@@ -403,7 +403,7 @@ const copyToClipboard = async (text) => {
     const success = document.execCommand('copy')
     textarea.remove()
     return success
-  } catch (error) {
+  } catch {
     return false
   }
 }
@@ -414,7 +414,7 @@ const formatTime = (timestamp) => {
       hour: '2-digit',
       minute: '2-digit',
     })
-  } catch (error) {
+  } catch {
     return ''
   }
 }
@@ -750,8 +750,20 @@ const parseResponsesText = (data) => {
   return ''
 }
 
-const sanitizeFilename = (value) =>
-  value.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '').slice(0, 80) || 'response'
+const sanitizeFilename = (value) => {
+  const filtered = String(value || '')
+    .split('')
+    .filter((char) => {
+      const code = char.charCodeAt(0)
+      if (code >= 0 && code <= 31) {
+        return false
+      }
+      return !/[<>:"/\\|?*]/.test(char)
+    })
+    .join('')
+    .trim()
+  return filtered.slice(0, 80) || 'response'
+}
 
 const formatExportTimestamp = () =>
   new Date().toISOString().replace('T', ' ').replace(/[:]/g, '-').slice(0, 19)
@@ -879,9 +891,8 @@ const renderMarkdownToHtml = (markdown) => {
   )
 }
 
-const buildExportHtml = (markdown) => `
-  <style>
-    ${katexCss}
+const buildExportHtml = (markdown) => {
+  const styles = `
     .markdown-export-root {
       font-family: "Georgia", "Palatino Linotype", "Times New Roman", serif;
       color: #0f172a;
@@ -929,9 +940,17 @@ const buildExportHtml = (markdown) => `
       break-inside: avoid;
       page-break-inside: avoid;
     }
-  </style>
-  <div class="markdown-export-root">${renderMarkdownToHtml(markdown)}</div>
-`
+  `
+  return [
+    '<style>',
+    katexCss,
+    styles,
+    '</style>',
+    '<div class="markdown-export-root">',
+    renderMarkdownToHtml(markdown),
+    '</div>',
+  ].join('')
+}
 
 const exportMarkdownAsPdf = async (markdown, filename) => {
   const html2pdfModule = await import('html2pdf.js')
@@ -1491,7 +1510,7 @@ const MessageBubble = ({ message, onError }) => {
         setCopiedResponse(true)
         setTimeout(() => setCopiedResponse(false), 1200)
         return
-      } catch (error) {
+      } catch {
         // Fall back to plain text copy.
       }
     }
@@ -1813,7 +1832,10 @@ function App() {
   })
   const activeChat =
     chats.find((chat) => chat.id === activeChatId) || chats[0]
-  const messages = activeChat?.messages ?? []
+  const messages = useMemo(
+    () => activeChat?.messages ?? [],
+    [activeChat],
+  )
   const virtualItems = useMemo(
     () =>
       showTypingIndicator
@@ -2111,28 +2133,29 @@ function App() {
         body: JSON.stringify(requestBody),
       })
 
-      if (!response.ok) {
-        let errorMessage = `${provider.name} request failed.`
-        try {
-          const errorData = await response.json()
-          const providerMessage =
-            errorData?.error?.message ||
-            errorData?.message ||
-            errorData?.error?.details?.[0]?.message
-          if (providerMessage) {
-            errorMessage = providerMessage
+        if (!response.ok) {
+          let errorMessage = `${provider.name} request failed.`
+          try {
+            const errorData = await response.json()
+            const providerMessage =
+              errorData?.error?.message ||
+              errorData?.message ||
+              errorData?.error?.details?.[0]?.message
+            if (providerMessage) {
+              errorMessage = providerMessage
+            }
+          } catch {
+            // Ignore parse errors and use fallback message.
           }
-        } catch (parseError) {
-          // Ignore parse errors and use fallback message.
-        }
 
-        if (response.status === 401 || response.status === 403) {
-          errorMessage = `Invalid API key for ${provider.name}. Please check your settings.`
-        } else if (response.status === 429) {
-          errorMessage = 'Rate limited. Please wait a moment.'
+          if (response.status === 401 || response.status === 403) {
+            errorMessage = `Invalid API key for ${provider.name}. Please check your settings.`
+          } else if (response.status === 429) {
+            errorMessage = 'Rate limited. Please wait a moment.'
+          }
+          setError(errorMessage)
+          return
         }
-        throw new Error(errorMessage)
-      }
 
       if (shouldStream && response.body) {
         const assistantId = generateId()
@@ -2193,7 +2216,7 @@ function App() {
           let payload = null
           try {
             payload = JSON.parse(dataText)
-          } catch (error) {
+          } catch {
             return false
           }
           const delta = extractStreamDelta(name, payload)
@@ -2233,7 +2256,6 @@ function App() {
             }
             if (line.startsWith('data:')) {
               dataLines.push(line.slice(5).trim())
-              continue
             }
           }
         }
@@ -2243,7 +2265,8 @@ function App() {
         }
 
         if (!fullText.trim()) {
-          throw new Error(`Empty response from ${provider.name}.`)
+          setError(`Empty response from ${provider.name}.`)
+          return
         }
 
         const previewResult =
@@ -2259,13 +2282,15 @@ function App() {
         data?.status === 'incomplete' &&
         data?.incomplete_details?.reason === 'max_output_tokens'
       ) {
-        throw new Error(
+        setError(
           'Response hit max output tokens. Increase Max Tokens or lower reasoning effort/verbosity.',
         )
+        return
       }
       const content = adapter.parseResponse(data)
       if (!content) {
-        throw new Error(`Empty response from ${provider.name}.`)
+        setError(`Empty response from ${provider.name}.`)
+        return
       }
 
       const previewResult =
@@ -2341,7 +2366,7 @@ function App() {
           kind,
           text,
         })
-      } catch (error) {
+      } catch {
         setError(`Failed to read ${file.name}.`)
       }
     }
