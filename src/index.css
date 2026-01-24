@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-display: swap;
+  font-family: "OpenAI Sans";
+  font-style: normal;
+  font-weight: 400;
+  src: url("https://cdn.openai.com/common/fonts/openai-sans/v2/OpenAISans-Regular.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "OpenAI Sans";
+  font-style: normal;
+  font-weight: 500;
+  src: url("https://cdn.openai.com/common/fonts/openai-sans/v2/OpenAISans-Medium.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "OpenAI Sans";
+  font-style: normal;
+  font-weight: 600;
+  src: url("https://cdn.openai.com/common/fonts/openai-sans/v2/OpenAISans-Semibold.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "OpenAI Sans";
+  font-style: normal;
+  font-weight: 700;
+  src: url("https://cdn.openai.com/common/fonts/openai-sans/v2/OpenAISans-Bold.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Mono";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  font-optical-sizing: auto;
+  font-feature-settings: "ccmp" on, "frac" on, "locl" on, "mark" on, "mkmk" on;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-synthesis: none;
+  src: url("https://cdn.openai.com/common/fonts/mono/hyperlegible-mono-latin.woff2")
+    format("woff2");
+  unicode-range: U+00??, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Mono";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  font-optical-sizing: auto;
+  src: url("https://cdn.openai.com/common/fonts/mono/hyperlegible-mono-latin-ext.woff2")
+    format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  :root.dark {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    overscroll-behavior-y: none;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    font-family: "OpenAI Sans", "Circle", "Trebuchet MS", "Lucida Sans Unicode",
+      "Lucida Grande", Verdana, sans-serif;
+  }
+
+  @supports (height: 100svh) {
+    body,
+    #root {
+      height: 100svh;
+    }
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    max-width: 100%;
+  }
+
+  @media (max-width: 640px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
+}
