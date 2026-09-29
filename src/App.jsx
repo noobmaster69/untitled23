@@ -15,6 +15,7 @@ import {
   Check,
   Copy,
   Download,
+  Eraser,
   Eye,
   EyeOff,
   MessageSquare,
@@ -2080,6 +2081,7 @@ function App() {
   const [activeChatId, setActiveChatId] = useState(() =>
     loadStored('llm-chat-active-chat', null),
   )
+  const [pendingDeleteId, setPendingDeleteId] = useState(null)
   const [inputValue, setInputValue] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -2327,6 +2329,7 @@ function App() {
       }
       if (event.key === 'Escape') {
         setSettingsOpen(false)
+        setPendingDeleteId(null)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -2730,6 +2733,27 @@ function App() {
     )
   }
 
+  const handleDeleteChat = (chatId) => {
+    setPendingDeleteId(null)
+    const remaining = chats.filter((chat) => chat.id !== chatId)
+    // Keep at least one chat around so the composer always has a target.
+    const replacement = createChat([])
+    setChats((prev) => {
+      const next = prev.filter((chat) => chat.id !== chatId)
+      return next.length ? next : [replacement]
+    })
+    if (!remaining.length) {
+      setActiveChatId(replacement.id)
+      return
+    }
+    if (activeChat?.id === chatId) {
+      const index = orderedChats.findIndex((chat) => chat.id === chatId)
+      const neighbor =
+        orderedChats[index + 1] || orderedChats[index - 1] || remaining[0]
+      setActiveChatId(neighbor.id)
+    }
+  }
+
   const handleExport = () => {
     if (!activeChat || !messages.length) {
       return
@@ -2873,47 +2897,86 @@ function App() {
               <div className="mt-4 flex-1 space-y-2 overflow-y-auto pr-1">
                 {orderedChats.map((chat) => {
                   const isActive = chat.id === activeChat?.id
+                  const isPendingDelete = chat.id === pendingDeleteId
                   return (
-                    <button
-                      key={chat.id}
-                      type="button"
-                      onClick={() => setActiveChatId(chat.id)}
-                      className={`w-full rounded-2xl border px-3 py-2 text-left transition ${
-                        isActive
-                          ? 'border-slate-900 bg-slate-900 text-white dark:border-[#fff3] dark:bg-[#414141] dark:text-[#ffffff]'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-[#ffffff26] dark:bg-[#303030] dark:text-[#f3f3f3] dark:hover:border-[#fff3]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span
-                          className={`text-sm font-semibold ${
-                            isActive
-                              ? 'text-white dark:text-[#ffffff]'
-                              : 'text-slate-700 dark:text-[#f3f3f3]'
-                          }`}
-                        >
-                          {chat.title}
-                        </span>
-                        <span
-                          className={`text-[10px] ${
-                            isActive
-                              ? 'text-white/70 dark:text-[#cdcdcd]'
-                              : 'text-slate-400 dark:text-[#afafaf]'
-                          }`}
-                        >
-                          {formatTime(chat.updatedAt || chat.createdAt)}
-                        </span>
-                      </div>
-                      <div
-                        className={`mt-1 text-xs ${
+                    <div key={chat.id} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setActiveChatId(chat.id)}
+                        className={`w-full rounded-2xl border px-3 py-2 pr-9 text-left transition ${
                           isActive
-                            ? 'text-white/80 dark:text-[#afafaf]'
-                            : 'text-slate-500 dark:text-[#afafaf]'
+                            ? 'border-slate-900 bg-slate-900 text-white dark:border-[#fff3] dark:bg-[#414141] dark:text-[#ffffff]'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-[#ffffff26] dark:bg-[#303030] dark:text-[#f3f3f3] dark:hover:border-[#fff3]'
                         }`}
                       >
-                        {getChatPreview(chat.messages)}
-                      </div>
-                    </button>
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`text-sm font-semibold ${
+                              isActive
+                                ? 'text-white dark:text-[#ffffff]'
+                                : 'text-slate-700 dark:text-[#f3f3f3]'
+                            }`}
+                          >
+                            {chat.title}
+                          </span>
+                          <span
+                            className={`text-[10px] ${
+                              isActive
+                                ? 'text-white/70 dark:text-[#cdcdcd]'
+                                : 'text-slate-400 dark:text-[#afafaf]'
+                            }`}
+                          >
+                            {formatTime(chat.updatedAt || chat.createdAt)}
+                          </span>
+                        </div>
+                        <div
+                          className={`mt-1 text-xs ${
+                            isActive
+                              ? 'text-white/80 dark:text-[#afafaf]'
+                              : 'text-slate-500 dark:text-[#afafaf]'
+                          }`}
+                        >
+                          {getChatPreview(chat.messages)}
+                        </div>
+                      </button>
+                      {isPendingDelete ? (
+                        <div className="absolute inset-0 flex items-center justify-between gap-2 rounded-2xl border border-red-200 bg-white/95 px-3 text-xs backdrop-blur dark:border-red-900/60 dark:bg-[#303030]/95">
+                          <span className="font-semibold text-slate-700 dark:text-[#f3f3f3]">
+                            Delete this chat?
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteChat(chat.id)}
+                              className="rounded-full bg-red-600 px-2.5 py-1 font-semibold text-white transition hover:bg-red-700"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPendingDeleteId(null)}
+                              className="rounded-full border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 transition hover:border-slate-300 dark:border-[#ffffff26] dark:text-[#cdcdcd] dark:hover:border-[#fff3]"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeleteId(chat.id)}
+                          aria-label={`Delete chat: ${chat.title}`}
+                          title="Delete chat"
+                          className={`absolute right-2 top-2 rounded-full p-1 transition ${
+                            isActive
+                              ? 'text-white/70 hover:bg-white/15 hover:text-white'
+                              : 'text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:text-[#afafaf] dark:hover:bg-[#414141] dark:hover:text-red-300'
+                          }`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   )
                 })}
               </div>
@@ -3350,9 +3413,42 @@ function App() {
                   onClick={handleClearChat}
                   className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900 dark:border-[#ffffff26] dark:text-[#cdcdcd] dark:hover:border-[#fff3] dark:hover:text-[#ffffff]"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Eraser className="h-4 w-4" />
                   Clear chat
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!activeChat) {
+                      return
+                    }
+                    if (pendingDeleteId === activeChat.id) {
+                      handleDeleteChat(activeChat.id)
+                    } else {
+                      setPendingDeleteId(activeChat.id)
+                    }
+                  }}
+                  disabled={!activeChat}
+                  className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:text-slate-300 ${
+                    activeChat && pendingDeleteId === activeChat.id
+                      ? 'border-red-600 bg-red-600 text-white hover:bg-red-700'
+                      : 'border-slate-200 text-slate-600 hover:border-red-300 hover:text-red-600 dark:border-[#ffffff26] dark:text-[#cdcdcd] dark:hover:border-red-400 dark:hover:text-red-300'
+                  }`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {activeChat && pendingDeleteId === activeChat.id
+                    ? 'Confirm delete'
+                    : 'Delete chat'}
+                </button>
+                {activeChat && pendingDeleteId === activeChat.id ? (
+                  <button
+                    type="button"
+                    onClick={() => setPendingDeleteId(null)}
+                    className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900 dark:border-[#ffffff26] dark:text-[#cdcdcd] dark:hover:border-[#fff3] dark:hover:text-[#ffffff]"
+                  >
+                    Cancel
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleExport}
