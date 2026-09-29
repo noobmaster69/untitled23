@@ -39,6 +39,28 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import * as XLSX from 'xlsx'
 import 'katex/dist/katex.min.css'
 
+const OPENAI_EFFORT_ORDER = ['none', 'low', 'medium', 'high', 'xhigh', 'max']
+const OPENAI_EFFORT_LABELS = {
+  none: 'None',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra high',
+  max: 'Max',
+}
+// Reasoning-effort levels accepted by each OpenAI model family.
+const EFFORTS_FRONTIER = ['none', 'low', 'medium', 'high', 'xhigh']
+const EFFORTS_ASTRA = ['low', 'medium', 'high', 'xhigh', 'max']
+const EFFORTS_PRO = ['medium', 'high', 'xhigh']
+const EFFORTS_GPT51 = ['none', 'low', 'medium', 'high']
+const EFFORTS_LEGACY = ['low', 'medium', 'high']
+
+// Model entries support optional capability flags:
+//   reasoning           - OpenAI reasoning model (reasoning.effort is sent)
+//   efforts             - allowed reasoning.effort values for that model
+//   verbosity           - model accepts text.verbosity
+//   supportsTemperature - Anthropic model that still accepts temperature
+//   maxOutput           - hard cap on output tokens for the model
 const PROVIDERS = {
   anthropic: {
     id: 'anthropic',
@@ -46,12 +68,29 @@ const PROVIDERS = {
     shortName: 'Claude',
     color: '#C48A5A',
     models: [
-      { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-      { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
-      { id: 'claude-haiku-3-5-20241022', name: 'Claude 3.5 Haiku' },
+      { id: 'claude-opus-5-5', name: 'Claude Opus 5.5' },
+      { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' },
+      { id: 'claude-fable-5-1', name: 'Claude Fable 5.1' },
+      { id: 'claude-fable-5', name: 'Claude Fable 5' },
+      { id: 'claude-opus-5', name: 'Claude Opus 5' },
+      { id: 'claude-sonnet-5', name: 'Claude Sonnet 5' },
+      { id: 'claude-opus-4-8', name: 'Claude Opus 4.8' },
+      { id: 'claude-opus-4-7', name: 'Claude Opus 4.7' },
+      { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', supportsTemperature: true },
+      {
+        id: 'claude-sonnet-4-6',
+        name: 'Claude Sonnet 4.6',
+        supportsTemperature: true,
+      },
+      {
+        id: 'claude-haiku-4-5',
+        name: 'Claude Haiku 4.5',
+        supportsTemperature: true,
+        maxOutput: 64000,
+      },
     ],
     tempRange: { min: 0, max: 1, default: 1, step: 0.1 },
-    maxTokensRange: { min: 1, max: 8192, default: 1024 },
+    maxTokensRange: { min: 1, max: 16384, default: 4096 },
     keyPrefix: 'sk-ant-',
     endpoint: 'https://api.anthropic.com/v1/messages',
   },
@@ -61,42 +100,162 @@ const PROVIDERS = {
     shortName: 'GPT',
     color: '#10A37F',
     models: [
-      { id: 'gpt-5.2', name: 'GPT-5.2' },
-      { id: 'gpt-5.2-pro-2025-12-11', name: 'GPT-5.2 Pro (2025-12-11)' },
-      { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro' },
-      { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex' },
-      { id: 'gpt-5.2-chat-latest', name: 'GPT-5.2 Chat Latest' },
-      { id: 'gpt-5.2-2025-12-11', name: 'GPT-5.2 (2025-12-11)' },
-      { id: 'gpt-4o', name: 'GPT-4o' },
-      { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-      { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-      { id: 'gpt-4.1', name: 'GPT-4.1' },
-      { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini' },
-      { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano' },
-      { id: 'gpt-4.1-nano-2025-04-14', name: 'GPT-4.1 Nano (2025-04-14)' },
-      { id: 'gpt-4.1-mini-2025-04-14', name: 'GPT-4.1 Mini (2025-04-14)' },
-      { id: 'gpt-4.1-2025-04-14', name: 'GPT-4.1 (2025-04-14)' },
-      { id: 'o3', name: 'o3' },
-      { id: 'o4-mini', name: 'o4-mini' },
-      { id: 'o1-pro', name: 'o1-pro' },
-      { id: 'o1', name: 'o1' },
-      { id: 'o1-2024-12-17', name: 'o1 (2024-12-17)' },
-      { id: 'o1-pro-2025-03-19', name: 'o1-pro (2025-03-19)' },
-      { id: 'o3-2025-04-16', name: 'o3 (2025-04-16)' },
-      { id: 'o3-deep-research', name: 'o3 Deep Research' },
-      { id: 'o3-mini', name: 'o3 Mini' },
-      { id: 'o3-mini-2025-01-31', name: 'o3 Mini (2025-01-31)' },
-      { id: 'o3-pro', name: 'o3 Pro' },
-      { id: 'o3-pro-2025-06-10', name: 'o3 Pro (2025-06-10)' },
-      { id: 'o4-mini-2025-04-16', name: 'o4-mini (2025-04-16)' },
-      { id: 'o4-mini-deep-research', name: 'o4-mini Deep Research' },
-      { id: 'o4-mini-deep-research-2025-06-26', name: 'o4-mini Deep Research (2025-06-26)' },
-      { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
+      {
+        id: 'gpt-6-astra',
+        name: 'GPT-6 Astra',
+        reasoning: true,
+        efforts: EFFORTS_ASTRA,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-6-sol',
+        name: 'GPT-6 Sol',
+        reasoning: true,
+        efforts: EFFORTS_FRONTIER,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-6-luna',
+        name: 'GPT-6 Luna',
+        reasoning: true,
+        efforts: EFFORTS_FRONTIER,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.6-sol',
+        name: 'GPT-5.6 Sol',
+        reasoning: true,
+        efforts: EFFORTS_FRONTIER,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.6-terra',
+        name: 'GPT-5.6 Terra',
+        reasoning: true,
+        efforts: EFFORTS_FRONTIER,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.6-luna',
+        name: 'GPT-5.6 Luna',
+        reasoning: true,
+        efforts: EFFORTS_FRONTIER,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.5',
+        name: 'GPT-5.5',
+        reasoning: true,
+        efforts: EFFORTS_FRONTIER,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.5-pro',
+        name: 'GPT-5.5 Pro',
+        reasoning: true,
+        efforts: EFFORTS_PRO,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.4',
+        name: 'GPT-5.4',
+        reasoning: true,
+        efforts: EFFORTS_FRONTIER,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.4-mini',
+        name: 'GPT-5.4 Mini',
+        reasoning: true,
+        efforts: EFFORTS_FRONTIER,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.4-nano',
+        name: 'GPT-5.4 Nano',
+        reasoning: true,
+        efforts: EFFORTS_FRONTIER,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.4-pro',
+        name: 'GPT-5.4 Pro',
+        reasoning: true,
+        efforts: EFFORTS_PRO,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.2',
+        name: 'GPT-5.2',
+        reasoning: true,
+        efforts: EFFORTS_FRONTIER,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.2-pro',
+        name: 'GPT-5.2 Pro',
+        reasoning: true,
+        efforts: EFFORTS_PRO,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5.1',
+        name: 'GPT-5.1',
+        reasoning: true,
+        efforts: EFFORTS_GPT51,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5',
+        name: 'GPT-5',
+        reasoning: true,
+        efforts: EFFORTS_LEGACY,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5-mini',
+        name: 'GPT-5 Mini',
+        reasoning: true,
+        efforts: EFFORTS_LEGACY,
+        verbosity: true,
+      },
+      {
+        id: 'gpt-5-nano',
+        name: 'GPT-5 Nano',
+        reasoning: true,
+        efforts: EFFORTS_LEGACY,
+        verbosity: true,
+      },
+      { id: 'gpt-4.1', name: 'GPT-4.1', maxOutput: 32768 },
+      { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', maxOutput: 32768 },
+      { id: 'gpt-4o', name: 'GPT-4o', maxOutput: 16384 },
+      { id: 'gpt-4o-mini', name: 'GPT-4o Mini', maxOutput: 16384 },
+      {
+        id: 'o3',
+        name: 'o3',
+        reasoning: true,
+        efforts: EFFORTS_LEGACY,
+        maxOutput: 100000,
+      },
+      {
+        id: 'o3-pro',
+        name: 'o3 Pro',
+        reasoning: true,
+        efforts: EFFORTS_LEGACY,
+        maxOutput: 100000,
+      },
+      {
+        id: 'o4-mini',
+        name: 'o4-mini',
+        reasoning: true,
+        efforts: EFFORTS_LEGACY,
+        maxOutput: 100000,
+      },
     ],
     tempRange: { min: 0, max: 2, default: 1, step: 0.1 },
     maxTokensRange: { min: 1, max: 50000, default: 50000 },
     keyPrefix: 'sk-',
-    endpoint: 'https://api.openai.com/v1/chat/completions',
+    endpoint: 'https://api.openai.com/v1/responses',
   },
   gemini: {
     id: 'gemini',
@@ -104,12 +263,16 @@ const PROVIDERS = {
     shortName: 'Gemini',
     color: '#1A73E8',
     models: [
-      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
+      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
+      { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+      { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite' },
+      { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (preview)' },
+      { id: 'gemini-pro-latest', name: 'Gemini Pro (latest)' },
+      { id: 'gemini-flash-latest', name: 'Gemini Flash (latest)' },
+      { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite (latest)' },
     ],
     tempRange: { min: 0, max: 2, default: 1, step: 0.1 },
-    maxTokensRange: { min: 1, max: 8192, default: 1024 },
+    maxTokensRange: { min: 1, max: 65536, default: 8192 },
     keyPrefix: 'AI',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
   },
@@ -119,11 +282,15 @@ const PROVIDERS = {
     shortName: 'Grok',
     color: '#111111',
     models: [
-      { id: 'grok-2', name: 'Grok 2' },
-      { id: 'grok-beta', name: 'Grok Beta' },
+      { id: 'grok-4.7', name: 'Grok 4.7' },
+      { id: 'grok-4.6', name: 'Grok 4.6' },
+      { id: 'grok-4.5', name: 'Grok 4.5' },
+      { id: 'grok-4.3', name: 'Grok 4.3' },
+      { id: 'grok-4.20-reasoning', name: 'Grok 4.20 (reasoning)' },
+      { id: 'grok-4.20-non-reasoning', name: 'Grok 4.20 (non-reasoning)' },
     ],
     tempRange: { min: 0, max: 2, default: 1, step: 0.1 },
-    maxTokensRange: { min: 1, max: 4096, default: 1024 },
+    maxTokensRange: { min: 1, max: 32768, default: 4096 },
     keyPrefix: 'xai-',
     endpoint: 'https://api.x.ai/v1/chat/completions',
   },
@@ -134,11 +301,20 @@ const PROVIDERS = {
     color: '#FF7000',
     models: [
       { id: 'mistral-large-latest', name: 'Mistral Large' },
+      { id: 'mistral-medium-latest', name: 'Mistral Medium' },
       { id: 'mistral-small-latest', name: 'Mistral Small' },
+      { id: 'magistral-medium-latest', name: 'Magistral Medium' },
+      { id: 'magistral-small-latest', name: 'Magistral Small' },
       { id: 'codestral-latest', name: 'Codestral' },
+      { id: 'devstral-medium-latest', name: 'Devstral Medium' },
+      { id: 'devstral-small-latest', name: 'Devstral Small' },
+      { id: 'ministral-14b-latest', name: 'Ministral 14B' },
+      { id: 'ministral-8b-latest', name: 'Ministral 8B' },
+      { id: 'ministral-3b-latest', name: 'Ministral 3B' },
+      { id: 'open-mistral-nemo', name: 'Mistral Nemo' },
     ],
     tempRange: { min: 0, max: 1, default: 0.7, step: 0.1 },
-    maxTokensRange: { min: 1, max: 8192, default: 1024 },
+    maxTokensRange: { min: 1, max: 32768, default: 4096 },
     keyPrefix: '',
     endpoint: 'https://api.mistral.ai/v1/chat/completions',
   },
@@ -148,14 +324,16 @@ const PROVIDERS = {
     shortName: 'Cohere',
     color: '#6B5CE7',
     models: [
-      { id: 'command-r-plus', name: 'Command R+' },
-      { id: 'command-r', name: 'Command R' },
-      { id: 'command', name: 'Command' },
+      { id: 'command-a-plus-05-2026', name: 'Command A+' },
+      { id: 'command-a-03-2025', name: 'Command A', maxOutput: 8000 },
+      { id: 'command-r-plus-08-2024', name: 'Command R+', maxOutput: 4096 },
+      { id: 'command-r-08-2024', name: 'Command R', maxOutput: 4096 },
+      { id: 'command-r7b-12-2024', name: 'Command R7B', maxOutput: 4096 },
     ],
     tempRange: { min: 0, max: 1, default: 0.7, step: 0.1 },
-    maxTokensRange: { min: 1, max: 4096, default: 1024 },
+    maxTokensRange: { min: 1, max: 16384, default: 2048 },
     keyPrefix: '',
-    endpoint: 'https://api.cohere.ai/v1/chat',
+    endpoint: 'https://api.cohere.com/v2/chat',
   },
 }
 
@@ -341,6 +519,31 @@ const VirtualRow = memo(({ index, style, data }) => {
 
 VirtualRow.displayName = 'VirtualRow'
 
+// Chat-style `content` can be a plain string or an array of typed parts
+// (e.g. reasoning models that emit `thinking` parts next to `text` parts).
+const extractTextFromContent = (content) => {
+  if (typeof content === 'string') {
+    return content
+  }
+  if (!Array.isArray(content)) {
+    return ''
+  }
+  return content
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part
+      }
+      if (!part || typeof part !== 'object') {
+        return ''
+      }
+      if (part.type && part.type !== 'text' && part.type !== 'output_text') {
+        return ''
+      }
+      return typeof part.text === 'string' ? part.text : ''
+    })
+    .join('')
+}
+
 const extractStreamDelta = (eventName, payload) => {
   if (!payload) {
     return ''
@@ -357,8 +560,12 @@ const extractStreamDelta = (eventName, payload) => {
   ) {
     return payload.delta
   }
-  if (payload.choices?.[0]?.delta?.content) {
-    return payload.choices[0].delta.content
+  const chunkContent = payload.choices?.[0]?.delta?.content
+  if (chunkContent) {
+    const chunkText = extractTextFromContent(chunkContent)
+    if (chunkText) {
+      return chunkText
+    }
   }
   if (payload.choices?.[0]?.text) {
     return payload.choices[0].text
@@ -435,11 +642,22 @@ const formatFileSize = (size) => {
   return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`
 }
 
+const getModelInfo = (providerId, modelId) =>
+  PROVIDERS[providerId]?.models?.find((model) => model.id === modelId) ?? null
+
 const getModelName = (providerId, modelId) => {
-  const provider = PROVIDERS[providerId]
-  const match = provider?.models?.find((model) => model.id === modelId)
+  const match = getModelInfo(providerId, modelId)
   return match ? match.name : modelId
 }
+
+// Upper bound for the max-tokens slider given the provider and selected model.
+const getModelMaxTokens = (provider, modelInfo) =>
+  modelInfo?.maxOutput
+    ? Math.min(provider.maxTokensRange.max, modelInfo.maxOutput)
+    : provider.maxTokensRange.max
+
+const clampMaxTokens = (modelInfo, value) =>
+  modelInfo?.maxOutput ? Math.min(value, modelInfo.maxOutput) : value
 
 const getKeyWarning = (providerId, apiKey) => {
   const prefix = PROVIDERS[providerId]?.keyPrefix
@@ -627,25 +845,25 @@ const formatAttachmentForPrompt = (attachment) => {
 const normalizeVerbosity = (value) =>
   ['low', 'medium', 'high'].includes(value) ? value : 'high'
 
-const normalizeReasoningEffort = (model, effort) => {
-  const allowed = ['none', 'low', 'medium', 'high']
-  const selected = allowed.includes(effort) ? effort : 'none'
-  if (!model) {
+// Snap a requested reasoning effort to a level the selected OpenAI model accepts.
+const normalizeReasoningEffort = (modelInfo, effort) => {
+  const allowed = modelInfo?.efforts ?? OPENAI_EFFORT_ORDER
+  const selected = OPENAI_EFFORT_ORDER.includes(effort) ? effort : 'high'
+  if (allowed.includes(selected)) {
     return selected
   }
-  if (model.startsWith('gpt-5.2-pro')) {
-    if (selected === 'none' || selected === 'low') {
-      return 'medium'
+  const index = OPENAI_EFFORT_ORDER.indexOf(selected)
+  for (let offset = 1; offset < OPENAI_EFFORT_ORDER.length; offset += 1) {
+    const lower = OPENAI_EFFORT_ORDER[index - offset]
+    if (lower && allowed.includes(lower)) {
+      return lower
     }
-    return selected
-  }
-  if (model.startsWith('gpt-5.2-codex')) {
-    if (selected === 'none') {
-      return 'low'
+    const higher = OPENAI_EFFORT_ORDER[index + offset]
+    if (higher && allowed.includes(higher)) {
+      return higher
     }
-    return selected
   }
-  return selected
+  return allowed[0]
 }
 
 const buildResponsesInput = (messages, systemPrompt) => {
@@ -1347,6 +1565,12 @@ const createMarkdownComponents = (isSoloCodeBlock) => ({
   ),
 })
 
+const bearerHeaders = (apiKey) => ({
+  'Content-Type': 'application/json',
+  Authorization: `Bearer ${apiKey}`,
+})
+
+// Chat Completions-compatible providers (xAI, Mistral).
 const openAiCompatibleAdapter = {
   formatRequest: (messages, settings) => {
     const system = settings.systemPrompt?.trim()
@@ -1354,69 +1578,96 @@ const openAiCompatibleAdapter = {
       role: message.role,
       content: message.content,
     }))
-    const isGpt5 = settings.model?.startsWith('gpt-5')
-    if (isGpt5) {
-      const systemWithPreview =
-        settings.reasoningPreviewEnabled && system
-          ? `${system}\n\n${REASONING_PREVIEW_INSTRUCTION}`
-          : settings.reasoningPreviewEnabled
-            ? REASONING_PREVIEW_INSTRUCTION
-            : system
-      const input = buildResponsesInput(messages, systemWithPreview)
-      const normalizedEffort = normalizeReasoningEffort(
-        settings.model,
-        settings.reasoningEffort,
-      )
-      const normalizedVerbosity = normalizeVerbosity(settings.verbosity)
-      const allowTemperature =
-        !settings.model?.startsWith('gpt-5.2') || normalizedEffort === 'none'
-      return {
-        model: settings.model,
-        input,
-        max_output_tokens: settings.maxTokens,
-        ...(allowTemperature ? { temperature: settings.temperature } : {}),
-        reasoning: { effort: normalizedEffort },
-        text: { verbosity: normalizedVerbosity },
-      }
-    }
-    const isO3 = settings.model?.startsWith('o3')
     return {
       model: settings.model,
-      ...(isO3
-        ? { max_completion_tokens: settings.maxTokens }
-        : { max_tokens: settings.maxTokens }),
+      max_tokens: settings.maxTokens,
       temperature: settings.temperature,
       messages: system
         ? [{ role: 'system', content: system }, ...mapped]
         : mapped,
     }
   },
-  getHeaders: (apiKey) => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${apiKey}`,
-  }),
-  getEndpoint: (model, providerEndpoint) =>
-    model?.startsWith('gpt-5')
-      ? 'https://api.openai.com/v1/responses'
-      : providerEndpoint,
+  getHeaders: bearerHeaders,
+  getEndpoint: (model, providerEndpoint) => providerEndpoint,
   parseResponse: (data) =>
-    data?.choices?.[0]?.message?.content ??
-    data?.choices?.[0]?.text ??
-    parseResponsesText(data),
+    extractTextFromContent(data?.choices?.[0]?.message?.content) ||
+    data?.choices?.[0]?.text ||
+    '',
 }
+
+// OpenAI: every model goes through the Responses API, which supports the
+// whole catalogue (the *-pro models are Responses-only).
+const openAiAdapter = {
+  formatRequest: (messages, settings) => {
+    const modelInfo = getModelInfo('openai', settings.model)
+    const isReasoning = Boolean(modelInfo?.reasoning)
+    const system = settings.systemPrompt?.trim()
+    const previewEnabled = isReasoning && settings.reasoningPreviewEnabled
+    const systemWithPreview = previewEnabled
+      ? system
+        ? `${system}\n\n${REASONING_PREVIEW_INSTRUCTION}`
+        : REASONING_PREVIEW_INSTRUCTION
+      : system
+    const input = buildResponsesInput(messages, systemWithPreview)
+    const normalizedEffort = isReasoning
+      ? normalizeReasoningEffort(modelInfo, settings.reasoningEffort)
+      : null
+    // Reasoning models reject temperature unless reasoning is turned off.
+    const allowTemperature = !isReasoning || normalizedEffort === 'none'
+    return {
+      model: settings.model,
+      input,
+      max_output_tokens: clampMaxTokens(modelInfo, settings.maxTokens),
+      ...(allowTemperature ? { temperature: settings.temperature } : {}),
+      ...(isReasoning ? { reasoning: { effort: normalizedEffort } } : {}),
+      ...(modelInfo?.verbosity
+        ? { text: { verbosity: normalizeVerbosity(settings.verbosity) } }
+        : {}),
+    }
+  },
+  getHeaders: bearerHeaders,
+  getEndpoint: () => 'https://api.openai.com/v1/responses',
+  parseResponse: (data) => parseResponsesText(data),
+  getResponseError: (data) => {
+    if (data?.error?.message) {
+      return data.error.message
+    }
+    if (
+      data?.status === 'incomplete' &&
+      data?.incomplete_details?.reason === 'max_output_tokens'
+    ) {
+      return 'Response hit max output tokens. Increase Max Tokens or lower reasoning effort/verbosity.'
+    }
+    return null
+  },
+}
+
+const parseAnthropicText = (data) =>
+  (Array.isArray(data?.content) ? data.content : [])
+    .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text)
+    .join('')
+    .trim()
 
 const ADAPTERS = {
   anthropic: {
-    formatRequest: (messages, settings) => ({
-      model: settings.model,
-      max_tokens: settings.maxTokens,
-      temperature: settings.temperature,
-      system: settings.systemPrompt,
-      messages: messages.map((message) => ({
-        role: message.role,
-        content: message.content,
-      })),
-    }),
+    formatRequest: (messages, settings) => {
+      const modelInfo = getModelInfo('anthropic', settings.model)
+      const system = settings.systemPrompt?.trim()
+      return {
+        model: settings.model,
+        max_tokens: clampMaxTokens(modelInfo, settings.maxTokens),
+        // Newer Claude models reject sampling parameters such as temperature.
+        ...(modelInfo?.supportsTemperature
+          ? { temperature: settings.temperature }
+          : {}),
+        ...(system ? { system } : {}),
+        messages: messages.map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
+      }
+    },
     getHeaders: (apiKey) => ({
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
@@ -1424,9 +1675,22 @@ const ADAPTERS = {
       'anthropic-dangerous-direct-browser-access': 'true',
     }),
     getEndpoint: () => 'https://api.anthropic.com/v1/messages',
-    parseResponse: (data) => data?.content?.[0]?.text ?? '',
+    // Responses may start with thinking blocks; only text blocks are shown.
+    parseResponse: parseAnthropicText,
+    getResponseError: (data) => {
+      if (data?.stop_reason === 'refusal') {
+        const explanation = data?.stop_details?.explanation
+        return explanation
+          ? `Anthropic declined this request: ${explanation}`
+          : 'Anthropic declined this request.'
+      }
+      if (data?.stop_reason === 'max_tokens' && !parseAnthropicText(data)) {
+        return 'Response hit the max tokens limit before any text was produced. Increase Max Tokens in settings.'
+      }
+      return null
+    },
   },
-  openai: openAiCompatibleAdapter,
+  openai: openAiAdapter,
   gemini: {
     formatRequest: (messages, settings) => ({
       contents: messages.map((message) => ({
@@ -1446,36 +1710,53 @@ const ADAPTERS = {
     }),
     getEndpoint: (model, _, apiKey) =>
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    // Skip thought parts so only the answer text is shown.
     parseResponse: (data) =>
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+      (data?.candidates?.[0]?.content?.parts ?? [])
+        .filter((part) => typeof part?.text === 'string' && !part.thought)
+        .map((part) => part.text)
+        .join(''),
+    getResponseError: (data) => {
+      const blockReason = data?.promptFeedback?.blockReason
+      if (blockReason) {
+        return `Gemini blocked the prompt (${blockReason}).`
+      }
+      const finishReason = data?.candidates?.[0]?.finishReason
+      const hasText = (data?.candidates?.[0]?.content?.parts ?? []).some(
+        (part) => typeof part?.text === 'string' && !part.thought && part.text,
+      )
+      if (finishReason === 'MAX_TOKENS' && !hasText) {
+        return 'Response hit the max tokens limit before any text was produced. Increase Max Tokens in settings.'
+      }
+      return null
+    },
   },
   grok: openAiCompatibleAdapter,
   mistral: openAiCompatibleAdapter,
+  // Cohere Chat API v2.
   cohere: {
     formatRequest: (messages, settings) => {
-      const lastMessage = messages[messages.length - 1]
-      const history = messages.slice(0, -1)
+      const modelInfo = getModelInfo('cohere', settings.model)
+      const system = settings.systemPrompt?.trim()
+      const mapped = messages.map((message) => ({
+        role: message.role === 'user' ? 'user' : 'assistant',
+        content: message.content,
+      }))
       return {
         model: settings.model,
-        message: lastMessage?.content ?? '',
-        chat_history: history.map((message) => ({
-          role: message.role === 'user' ? 'USER' : 'CHATBOT',
-          message: message.content,
-        })),
-        preamble: settings.systemPrompt,
+        messages: system
+          ? [{ role: 'system', content: system }, ...mapped]
+          : mapped,
         temperature: settings.temperature,
-        max_tokens: settings.maxTokens,
+        max_tokens: clampMaxTokens(modelInfo, settings.maxTokens),
       }
     },
-    getHeaders: (apiKey) => ({
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    }),
-    getEndpoint: () => 'https://api.cohere.ai/v1/chat',
-    parseResponse: (data) => data?.text ?? '',
+    getHeaders: bearerHeaders,
+    getEndpoint: () => 'https://api.cohere.com/v2/chat',
+    parseResponse: (data) =>
+      extractTextFromContent(data?.message?.content) || data?.text || '',
   },
 }
-
 
 const MessageBubble = ({ message, onError }) => {
   const isUser = message.role === 'user'
@@ -1745,9 +2026,12 @@ function App() {
     const stored = loadStored('llm-chat-provider', 'anthropic')
     return PROVIDERS[stored] ? stored : 'anthropic'
   })
-  const [activeModel, setActiveModel] = useState(() =>
-    loadStored('llm-chat-model', PROVIDERS.anthropic.models[0].id),
-  )
+  const [activeModel, setActiveModel] = useState(() => {
+    const stored = loadStored('llm-chat-model', null)
+    return typeof stored === 'string' && stored
+      ? stored
+      : PROVIDERS.anthropic.models[0].id
+  })
   const [apiKeys, setApiKeys] = useState(() => {
     const keys = {}
     PROVIDER_ORDER.forEach((providerId) => {
@@ -1759,7 +2043,12 @@ function App() {
     Number(loadStored('llm-chat-temperature', 1)),
   )
   const [maxTokens, setMaxTokens] = useState(() =>
-    Number(loadStored('llm-chat-max-tokens', 1024)),
+    Number(
+      loadStored(
+        'llm-chat-max-tokens',
+        PROVIDERS.anthropic.maxTokensRange.default,
+      ),
+    ),
   )
   const [systemPrompt, setSystemPrompt] = useState(() =>
     loadStored('llm-chat-system-prompt', DEFAULT_SYSTEM_PROMPT),
@@ -1813,16 +2102,29 @@ function App() {
 
   const provider = PROVIDERS[activeProvider] ?? PROVIDERS.anthropic
   const keyWarning = getKeyWarning(activeProvider, apiKeys[activeProvider])
-  const showGpt52Controls =
-    activeProvider === 'openai' && activeModel.startsWith('gpt-5.2')
-  const showGpt5Controls =
-    activeProvider === 'openai' && activeModel.startsWith('gpt-5')
+  const activeModelInfo = getModelInfo(activeProvider, activeModel)
+  const isOpenAiReasoningModel =
+    activeProvider === 'openai' && Boolean(activeModelInfo?.reasoning)
+  const showEffortControls = isOpenAiReasoningModel
+  const showVerbosityControls =
+    activeProvider === 'openai' && Boolean(activeModelInfo?.verbosity)
+  const showReasoningPreview = isOpenAiReasoningModel
+  const effortOptions = activeModelInfo?.efforts ?? OPENAI_EFFORT_ORDER
   const normalizedReasoningEffort = normalizeReasoningEffort(
-    activeModel,
+    activeModelInfo,
     reasoningEffort,
   )
-  const temperatureDisabled =
-    showGpt52Controls && normalizedReasoningEffort !== 'none'
+  const temperatureSupported =
+    activeProvider === 'anthropic'
+      ? Boolean(activeModelInfo?.supportsTemperature)
+      : !(isOpenAiReasoningModel && normalizedReasoningEffort !== 'none')
+  const temperatureDisabled = !temperatureSupported
+  const temperatureNote = temperatureSupported
+    ? ''
+    : activeProvider === 'anthropic'
+      ? 'This Claude model does not accept a temperature setting, so it is left out of requests.'
+      : 'Temperature is available only when reasoning effort is set to None on OpenAI reasoning models.'
+  const modelMaxTokens = getModelMaxTokens(provider, activeModelInfo)
   const canSend = Boolean(inputValue.trim() || attachments.length)
   const showTypingIndicator = isLoading && !streamingMessageId
   const orderedChats = [...chats].sort((a, b) => {
@@ -1948,14 +2250,14 @@ function App() {
           )
         : providerSettings.tempRange.default,
     )
+    const maxTokensCeiling = getModelMaxTokens(
+      providerSettings,
+      getModelInfo(activeProvider, activeModel),
+    )
     setMaxTokens((current) =>
       Number.isFinite(current)
-        ? clamp(
-            current,
-            providerSettings.maxTokensRange.min,
-            providerSettings.maxTokensRange.max,
-          )
-        : providerSettings.maxTokensRange.default,
+        ? clamp(current, providerSettings.maxTokensRange.min, maxTokensCeiling)
+        : Math.min(providerSettings.maxTokensRange.default, maxTokensCeiling),
     )
   }, [activeProvider, activeModel])
 
@@ -2032,11 +2334,14 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const normalized = normalizeReasoningEffort(activeModel, reasoningEffort)
+    if (!isOpenAiReasoningModel) {
+      return
+    }
+    const normalized = normalizeReasoningEffort(activeModelInfo, reasoningEffort)
     if (normalized !== reasoningEffort) {
       setReasoningEffort(normalized)
     }
-  }, [activeModel, reasoningEffort])
+  }, [activeModelInfo, isOpenAiReasoningModel, reasoningEffort])
 
   const handleSend = async () => {
     if (isLoading) {
@@ -2112,7 +2417,7 @@ function App() {
         systemPrompt,
         reasoningEffort,
         verbosity,
-        reasoningPreviewEnabled: showGpt5Controls && reasoningPreviewEnabled,
+        reasoningPreviewEnabled: showReasoningPreview && reasoningPreviewEnabled,
       }
       const body = adapter.formatRequest(conversation, settings)
       const endpoint = adapter.getEndpoint(
@@ -2219,6 +2524,25 @@ function App() {
           } catch {
             return false
           }
+          if (payload?.type === 'error' || payload?.error) {
+            throw new Error(
+              payload?.error?.message ||
+                payload?.message ||
+                `${provider.name} stream error.`,
+            )
+          }
+          if (
+            payload?.type === 'response.incomplete' ||
+            (payload?.type === 'response.completed' &&
+              payload?.response?.status === 'incomplete')
+          ) {
+            if (!fullText.trim()) {
+              throw new Error(
+                'Response hit max output tokens. Increase Max Tokens or lower reasoning effort/verbosity.',
+              )
+            }
+            return true
+          }
           const delta = extractStreamDelta(name, payload)
           if (delta) {
             fullText += delta
@@ -2270,7 +2594,7 @@ function App() {
         }
 
         const previewResult =
-          showGpt5Controls && reasoningPreviewEnabled
+          showReasoningPreview && reasoningPreviewEnabled
             ? extractReasoningPreview(fullText)
             : { cleaned: fullText, preview: '' }
         updateAssistantContent(previewResult.cleaned, previewResult.preview)
@@ -2278,13 +2602,9 @@ function App() {
       }
 
       const data = await response.json()
-      if (
-        data?.status === 'incomplete' &&
-        data?.incomplete_details?.reason === 'max_output_tokens'
-      ) {
-        setError(
-          'Response hit max output tokens. Increase Max Tokens or lower reasoning effort/verbosity.',
-        )
+      const responseError = adapter.getResponseError?.(data)
+      if (responseError) {
+        setError(responseError)
         return
       }
       const content = adapter.parseResponse(data)
@@ -2294,7 +2614,7 @@ function App() {
       }
 
       const previewResult =
-        showGpt5Controls && reasoningPreviewEnabled
+        showReasoningPreview && reasoningPreviewEnabled
           ? extractReasoningPreview(content)
           : { cleaned: content, preview: '' }
       const assistantMessage = {
@@ -2907,33 +3227,33 @@ function App() {
                   <span>{provider.tempRange.min}</span>
                   <span>{provider.tempRange.max}</span>
                 </div>
-                {temperatureDisabled ? (
+                {temperatureNote ? (
                   <div className="text-xs text-slate-500 dark:text-[#afafaf]">
-                    Temperature is available only with reasoning set to None for
-                    GPT-5.2 models.
+                    {temperatureNote}
                   </div>
                 ) : null}
               </div>
 
-              {showGpt52Controls ? (
+              {showEffortControls ? (
                 <div className="space-y-2">
                   <div className="text-sm font-semibold text-slate-900 dark:text-[#ffffff]">
                     Reasoning effort
                   </div>
                   <select
-                    value={reasoningEffort}
+                    value={normalizedReasoningEffort}
                     onChange={(event) => setReasoningEffort(event.target.value)}
                     className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200 dark:border-[#ffffff26] dark:bg-[#303030] dark:text-[#ffffff] dark:focus:border-[#fff3] dark:focus:ring-[#414141] [&>option]:bg-white [&>option]:text-slate-900 dark:[&>option]:bg-[#303030] dark:[&>option]:text-[#ffffff]"
                   >
-                    <option value="none">None</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
+                    {effortOptions.map((effort) => (
+                      <option key={effort} value={effort}>
+                        {OPENAI_EFFORT_LABELS[effort] ?? effort}
+                      </option>
+                    ))}
                   </select>
                 </div>
               ) : null}
 
-              {showGpt52Controls ? (
+              {showVerbosityControls ? (
                 <div className="space-y-2">
                   <div className="text-sm font-semibold text-slate-900 dark:text-[#ffffff]">
                     Verbosity
@@ -2950,7 +3270,7 @@ function App() {
                 </div>
               ) : null}
 
-              {showGpt5Controls ? (
+              {showReasoningPreview ? (
                 <div className="space-y-2">
                   <div className="text-sm font-semibold text-slate-900 dark:text-[#ffffff]">
                     Reasoning preview
@@ -2970,7 +3290,7 @@ function App() {
                       {reasoningPreviewEnabled ? 'Enabled' : 'Disabled'}
                     </span>
                     <span className="text-xs text-slate-400 dark:text-[#afafaf]">
-                      GPT-5 only
+                      Reasoning models
                     </span>
                   </button>
                   <div className="text-xs text-slate-500 dark:text-[#afafaf]">
@@ -2989,7 +3309,7 @@ function App() {
                 <input
                   type="range"
                   min={provider.maxTokensRange.min}
-                  max={provider.maxTokensRange.max}
+                  max={modelMaxTokens}
                   step={1}
                   value={maxTokens}
                   onChange={(event) =>
@@ -2997,7 +3317,7 @@ function App() {
                       clamp(
                         Number(event.target.value),
                         provider.maxTokensRange.min,
-                        provider.maxTokensRange.max,
+                        modelMaxTokens,
                       ),
                     )
                   }
@@ -3005,7 +3325,7 @@ function App() {
                 />
                 <div className="flex items-center justify-between text-[11px] text-slate-400 dark:text-[#afafaf]">
                   <span>{provider.maxTokensRange.min.toLocaleString()}</span>
-                  <span>{provider.maxTokensRange.max.toLocaleString()}</span>
+                  <span>{modelMaxTokens.toLocaleString()}</span>
                 </div>
               </div>
 
